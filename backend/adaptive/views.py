@@ -431,8 +431,38 @@ class RoadmapNodeUpdateView(APIView):
         node.status = new_status
         node.save(update_fields=['status'])
 
-        # Auto-unlock next node if this one was completed
+        # Auto-unlock next node and update ConceptMastery & XP if this one was completed
         if new_status == 'completed':
+            # 1. Update ConceptMastery so Progress tab updates in real-time
+            try:
+                mastery, _ = ConceptMastery.objects.get_or_create(
+                    user=request.user, concept=node.concept
+                )
+                mastery.mastery_score = max(mastery.mastery_score, 85.0)
+                mastery.confidence = max(mastery.confidence, 90.0)
+                mastery.attempts = max(mastery.attempts, 1)
+                mastery.successful_attempts = max(mastery.successful_attempts, 1)
+                mastery.needs_revision = False
+                mastery.mastery_state = mastery.compute_mastery_state()
+                mastery.save()
+            except Exception as e:
+                logger.warning(f"Could not update ConceptMastery for completed node: {e}")
+
+            # 2. Award XP and streak to student profile
+            try:
+                profile = getattr(request.user, 'profile', None)
+                if profile:
+                    profile.total_xp += 50
+                    if profile.streak == 0:
+                        profile.streak = 1
+                    if profile.total_xp >= 300:
+                        profile.level = 'advanced'
+                    elif profile.total_xp >= 100:
+                        profile.level = 'intermediate'
+                    profile.save()
+            except Exception as e:
+                logger.warning(f"Could not update StudentProfile XP: {e}")
+
             next_node = RoadmapNode.objects.filter(
                 roadmap=node.roadmap,
                 order__gt=node.order,

@@ -255,15 +255,27 @@ class ProgressAnalyticsView(APIView):
                 state = m.mastery_state
                 state_counts[state] = state_counts.get(state, 0) + 1
                 total_score += m.mastery_score
-                total_confidence += m.confidence_score
-                total_attempts += m.attempts_count
+                total_confidence += m.confidence
+                total_attempts += m.attempts
                 total_successes += m.successful_attempts
-                total_repeated_mistakes += m.repeated_mistakes_count
+                total_repeated_mistakes += m.repeated_mistakes
                 tiers[tier_key]['score_sum'] += m.mastery_score
-                if state == 'mastered':
+                if state in ['mastered', 'strong']:
                     tiers[tier_key]['mastered'] += 1
             else:
                 state_counts['not_started'] += 1
+
+        # Also incorporate assessment submissions if available
+        try:
+            from assessments.models import Submission
+            user_subs = Submission.objects.filter(user=user)
+            sub_count = user_subs.count()
+            if sub_count > 0:
+                sub_successes = user_subs.filter(passed=True).count()
+                total_attempts = max(total_attempts, sub_count)
+                total_successes = max(total_successes, sub_successes)
+        except Exception:
+            pass
 
         avg_mastery = round(total_score / total_concepts, 1) if total_concepts else 0
         avg_confidence = round(total_confidence / total_concepts, 1) if total_concepts else 0
@@ -290,17 +302,17 @@ class ProgressAnalyticsView(APIView):
                     'difficulty': m.concept.difficulty,
                     'state': m.mastery_state,
                     'score': round(m.mastery_score, 1),
-                    'attempts': m.attempts_count,
+                    'attempts': m.attempts,
                 })
 
         return Response({
             'overview': {
                 'total_concepts': total_concepts,
-                'mastered_count': state_counts['mastered'],
-                'developing_count': state_counts['developing'],
-                'weak_count': state_counts['weak'],
-                'critical_count': state_counts['critical'],
-                'not_started_count': state_counts['not_started'],
+                'mastered_count': state_counts.get('strong', 0) + state_counts.get('mastered', 0),
+                'developing_count': state_counts.get('developing', 0),
+                'weak_count': state_counts.get('weak', 0),
+                'critical_count': state_counts.get('critical', 0),
+                'not_started_count': state_counts.get('not_started', 0),
                 'average_mastery': avg_mastery,
                 'average_confidence': avg_confidence,
                 'total_attempts': total_attempts,

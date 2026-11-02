@@ -187,6 +187,22 @@ class SubmitCodeView(APIView):
         
         mastery.record_attempt(success=passed, mistake_tags=mistake_tags)
 
+        # Award XP and streak on successful problem completion
+        if passed:
+            try:
+                profile = getattr(request.user, 'profile', None)
+                if profile:
+                    profile.total_xp += 30
+                    if profile.streak == 0:
+                        profile.streak = 1
+                    if profile.total_xp >= 300:
+                        profile.level = 'advanced'
+                    elif profile.total_xp >= 100:
+                        profile.level = 'intermediate'
+                    profile.save()
+            except Exception as e:
+                logger.warning(f"Could not update profile XP on submission: {e}")
+
         return Response({
             'submission_id': submission.id,
             'status': 'accepted' if passed else 'wrong_answer',

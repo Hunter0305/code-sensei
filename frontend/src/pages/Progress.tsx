@@ -82,6 +82,13 @@ export const Progress: React.FC = () => {
 
   useEffect(() => {
     fetchAnalytics();
+
+    // Auto-refresh when user returns to this tab
+    const handleFocus = () => {
+      fetchAnalytics();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   }, []);
 
   return (
@@ -90,6 +97,15 @@ export const Progress: React.FC = () => {
       subtitle="Real-time telemetry on concept retention, cognitive velocity, and curriculum mastery"
       actions={
         <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />}
+            onClick={() => fetchAnalytics()}
+            disabled={loading}
+          >
+            Refresh
+          </Button>
           <Button
             variant="secondary"
             size="sm"
