@@ -5,7 +5,7 @@ import { Badge } from '../components/ui/Badge';
 import api from '../lib/api';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Plus, Search, Trash2, ArrowUp, AlertTriangle, Users, Database, Sparkles, CheckCircle2, MessageSquare, ShieldCheck, Copy, Check, Code, Paperclip, FileCode, X, Upload } from 'lucide-react';
+import { Plus, Search, Trash2, ArrowUp, Users, Database, Sparkles, CheckCircle2, MessageSquare, ShieldCheck, Copy, Check, Code, Paperclip, FileCode, X, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -588,15 +588,24 @@ const AIMentor: React.FC = () => {
     }
   };
 
-  const escalateHint = async () => {
+  const changeHintLevel = async (newLevel?: number) => {
     if (!activeConv) return;
     try {
-      const { data } = await api.post(`/mentor/conversations/${activeConv.id}/hint/`);
-      setHintLevel(data.hint_level || hintLevel + 1);
+      const payload = newLevel ? { hint_level: newLevel } : {};
+      const { data } = await api.post(`/mentor/conversations/${activeConv.id}/hint/`, payload);
+      const lvl = data.hint_level || newLevel || hintLevel + 1;
+      setHintLevel(lvl);
+      toast.info(data.message || `Hint level updated to ${lvl}/5`);
+      if (data.hint_prompt && !inputText.trim()) {
+        setInputText(data.hint_prompt);
+      }
     } catch (err) {
       console.error(err);
+      toast.error('Failed to update hint level.');
     }
   };
+
+  const escalateHint = () => changeHintLevel();
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -909,24 +918,42 @@ const AIMentor: React.FC = () => {
                     )}
                   </button>
 
-                  {/* Hint level */}
-                  <div className="flex items-center gap-1">
-                    {[1, 2, 3, 4, 5].map((l) => (
-                      <div
-                        key={l}
-                        className={`w-5 h-1.5 rounded-full ${l <= hintLevel ? 'bg-[var(--accent)]' : 'bg-[var(--border-default)]'}`}
-                      />
-                    ))}
+                  {/* Hint level progression selector */}
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-lg">
+                    <span className="text-[10px] uppercase font-semibold text-[var(--text-tertiary)] flex items-center gap-1 mr-1">
+                      <Sparkles className="w-3 h-3 text-amber-400" />
+                      Hint Lvl {hintLevel}:
+                    </span>
+                    <div className="flex items-center gap-1">
+                      {[1, 2, 3, 4, 5].map((l) => (
+                        <button
+                          key={l}
+                          type="button"
+                          onClick={() => changeHintLevel(l)}
+                          title={`Click to switch to Level ${l}: ${
+                            l === 1 ? 'Socratic Guidance (No code)' :
+                            l === 2 ? 'Directional Nudge' :
+                            l === 3 ? 'Pseudocode & Logic' :
+                            l === 4 ? 'Code Skeleton' : 'Full Solution'
+                          }`}
+                          className={`w-4 h-2 rounded-sm transition-all cursor-pointer ${
+                            l <= hintLevel
+                              ? 'bg-[var(--accent)] hover:opacity-80 shadow-sm'
+                              : 'bg-[var(--border-default)] hover:bg-[var(--border-hover)]'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={escalateHint}
+                      disabled={hintLevel >= 5}
+                      title="Step up to a more direct hint"
+                      className="ml-1 text-[11px] font-medium text-[var(--accent-light)] hover:text-white disabled:opacity-40 transition-colors"
+                    >
+                      {hintLevel < 5 ? '+ Escalate' : 'Max'}
+                    </button>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon={<AlertTriangle className="w-3 h-3" />}
-                    onClick={escalateHint}
-                    className="text-[var(--warning)]"
-                  >
-                    Escalate
-                  </Button>
                 </div>
               </div>
 

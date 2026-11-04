@@ -174,16 +174,54 @@ def list_agents() -> list[dict]:
     ]
 
 
-def build_system_message(agent_id: str, dossier_context: str = '') -> dict:
+def build_system_message(agent_id: str, dossier_context: str = '', hint_level: int = 1) -> dict:
     """
-    Build the system message for an agent, injecting full student intelligence
-    and cross-agent collaborative faculty briefing.
+    Build the system message for an agent, injecting full student intelligence,
+    cross-agent collaborative faculty briefing, and the active progressive hint tier.
     """
     agent = MENTOR_AGENTS.get(agent_id)
     if not agent:
         raise ValueError(f'Unknown agent: {agent_id}')
 
     system_content = agent['system_prompt']
+
+    # Strict progressive hint scaffolding
+    hint_guidelines = {
+        1: (
+            "HINT LEVEL 1/5 (Strict Socratic Guidance):\n"
+            "- DO NOT write solution code or pseudocode.\n"
+            "- Ask guiding questions and use conceptual analogies.\n"
+            "- Guide the student to break down the problem in their own words."
+        ),
+        2: (
+            "HINT LEVEL 2/5 (Directional Nudge):\n"
+            "- Suggest the general strategy, design pattern, or data structure (e.g. 'Consider using a hash map or two pointers').\n"
+            "- Still refrain from writing multi-line code blocks."
+        ),
+        3: (
+            "HINT LEVEL 3/5 (Algorithmic Logic & Pseudocode):\n"
+            "- Outline the step-by-step logic in clear numbered points or high-level pseudocode.\n"
+            "- Do not provide final copy-pasteable syntax yet."
+        ),
+        4: (
+            "HINT LEVEL 4/5 (Code Skeleton & Scaffolding):\n"
+            "- Provide function signatures, input validation, and scaffold code with '# TODO' placeholders for the student to finish."
+        ),
+        5: (
+            "HINT LEVEL 5/5 (Full Solution & Deep Walkthrough):\n"
+            "- Provide the complete, working code solution with clean formatting.\n"
+            "- Follow up with a detailed line-by-line explanation and Time/Space complexity (Big-O analysis)."
+        ),
+    }
+
+    active_hint_rule = hint_guidelines.get(hint_level, hint_guidelines[1])
+
+    system_content += f"""
+
+---
+### 💡 ACTIVE HINT PROTOCOL (CURRENT LEVEL: {hint_level} / 5):
+{active_hint_rule}
+"""
 
     if dossier_context:
         system_content += f"""

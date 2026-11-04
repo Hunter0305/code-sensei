@@ -146,8 +146,8 @@ class SendMessageView(APIView):
         # Build rich student intelligence dossier for system prompt
         mastery_ctx = build_mastery_context(request.user, current_agent_id=conversation.agent_id)
 
-        # Build full message list for Ollama
-        system_msg = build_system_message(conversation.agent_id, mastery_ctx)
+        # Build full message list for Ollama with active hint scaffolding
+        system_msg = build_system_message(conversation.agent_id, mastery_ctx, hint_level=conversation.hint_level)
         history    = conversation.get_message_history()
         messages   = [system_msg] + history
 
@@ -237,7 +237,7 @@ class SendMessageView(APIView):
 # ── Hint escalation ───────────────────────────────────────────
 
 class EscalateHintView(APIView):
-    """Increase the hint level for a conversation (max 5)."""
+    """Set or increase the hint level for a conversation (1 to 5)."""
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, pk):
@@ -246,28 +246,45 @@ class EscalateHintView(APIView):
         except Conversation.DoesNotExist:
             return Response({'error': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        if conversation.hint_level >= 5:
-            return Response({
-                'hint_level': 5,
-                'message': 'Maximum hint level reached (Level 5 — full solution).',
-            })
+        target_level = request.data.get('hint_level')
+        if target_level is not None:
+            try:
+                target_level = int(target_level)
+                if 1 <= target_level <= 5:
+                    conversation.hint_level = target_level
+                else:
+                    return Response({'error': 'Hint level must be between 1 and 5.'}, status=status.HTTP_400_BAD_REQUEST)
+            except (ValueError, TypeError):
+                return Response({'error': 'Invalid hint level.'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            if conversation.hint_level < 5:
+                conversation.hint_level += 1
 
-        conversation.hint_level += 1
         conversation.save(update_fields=['hint_level', 'updated_at'])
 
         # Build a hint escalation message automatically
         hint_prompts = {
-            2: 'Give me a small nudge — just a hint about what direction to think in.',
-            3: 'I need a bigger hint — tell me the general approach or algorithm.',
-            4: 'I am still stuck. Give me a more direct hint about the solution structure.',
-            5: 'I have been trying for a while. Please walk me through the complete solution with explanation.',
+            1: 'Can you guide me with conceptual analogies? Please do not write solution code yet.',
+            2: 'Give me a small nudge — just a hint about what direction to think in or what data structure to use.',
+            3: 'I need a bigger hint — outline the step-by-step algorithmic logic or pseudocode.',
+            4: 'I am still stuck. Give me a code skeleton or scaffolding with placeholders.',
+            5: 'Please walk me through the complete working solution and explain each part thoroughly.',
         }
         hint_text = hint_prompts.get(conversation.hint_level, 'Please give me more help.')
 
+        level_labels = {
+            1: 'Socratic Nudge',
+            2: 'Directional Hint',
+            3: 'Pseudocode / Logic',
+            4: 'Code Skeleton',
+            5: 'Full Solution',
+        }
+
         return Response({
             'hint_level': conversation.hint_level,
+            'hint_label': level_labels.get(conversation.hint_level, f'Level {conversation.hint_level}'),
             'hint_prompt': hint_text,
-            'message': f'Hint level escalated to {conversation.hint_level}/5.',
+            'message': f'Hint level set to {conversation.hint_level}/5 ({level_labels.get(conversation.hint_level)}).',
         })
 
 
