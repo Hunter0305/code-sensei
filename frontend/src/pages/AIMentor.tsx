@@ -590,17 +590,21 @@ const AIMentor: React.FC = () => {
 
   const changeHintLevel = async (newLevel?: number) => {
     if (!activeConv) return;
+    if (newLevel === undefined && hintLevel >= 5) {
+      toast.info('Already at maximum hint level (Level 5 — Full Solution).');
+      return;
+    }
     try {
       const payload = newLevel ? { hint_level: newLevel } : {};
       const { data } = await api.post(`/mentor/conversations/${activeConv.id}/hint/`, payload);
-      const lvl = data.hint_level || newLevel || hintLevel + 1;
+      const lvl = data.hint_level || newLevel || (hintLevel < 5 ? hintLevel + 1 : 5);
       setHintLevel(lvl);
-      toast.info(data.message || `Hint level updated to ${lvl}/5`);
-      if (data.hint_prompt && !inputText.trim()) {
-        setInputText(data.hint_prompt);
+      toast.success(data.message || `Hint level set to ${lvl}/5`);
+      if (data.hint_prompt && !input.trim()) {
+        setInput(data.hint_prompt);
       }
     } catch (err) {
-      console.error(err);
+      console.error('Failed to update hint level:', err);
       toast.error('Failed to update hint level.');
     }
   };
@@ -930,25 +934,29 @@ const AIMentor: React.FC = () => {
                           key={l}
                           type="button"
                           onClick={() => changeHintLevel(l)}
-                          title={`Click to switch to Level ${l}: ${
+                          title={`Level ${l}: ${
                             l === 1 ? 'Socratic Guidance (No code)' :
                             l === 2 ? 'Directional Nudge' :
                             l === 3 ? 'Pseudocode & Logic' :
                             l === 4 ? 'Code Skeleton' : 'Full Solution'
                           }`}
-                          className={`w-4 h-2 rounded-sm transition-all cursor-pointer ${
-                            l <= hintLevel
-                              ? 'bg-[var(--accent)] hover:opacity-80 shadow-sm'
-                              : 'bg-[var(--border-default)] hover:bg-[var(--border-hover)]'
+                          className={`w-5 h-4 rounded flex items-center justify-center text-[10px] font-bold transition-all cursor-pointer ${
+                            l === hintLevel
+                              ? 'bg-[var(--accent)] text-white shadow-sm ring-1 ring-[var(--accent-light)]'
+                              : l < hintLevel
+                              ? 'bg-[var(--accent)]/50 text-white/80 hover:bg-[var(--accent)]'
+                              : 'bg-[var(--border-default)] text-[var(--text-quaternary)] hover:bg-[var(--border-hover)] hover:text-[var(--text-secondary)]'
                           }`}
-                        />
+                        >
+                          {l}
+                        </button>
                       ))}
                     </div>
                     <button
                       type="button"
                       onClick={escalateHint}
                       disabled={hintLevel >= 5}
-                      title="Step up to a more direct hint"
+                      title={hintLevel >= 5 ? 'At maximum hint level' : 'Step up to a more direct hint'}
                       className="ml-1 text-[11px] font-medium text-[var(--accent-light)] hover:text-white disabled:opacity-40 transition-colors"
                     >
                       {hintLevel < 5 ? '+ Escalate' : 'Max'}
